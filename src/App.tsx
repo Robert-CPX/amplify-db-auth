@@ -1,35 +1,60 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect, useState } from "react";
+import { generateClient } from "aws-amplify/api";
+import { type Schema } from "../amplify/data/resource";
+import { Amplify } from "aws-amplify";
+import outputs from "../amplify_outputs.json";
+import { withAuthenticator } from "@aws-amplify/ui-react";
+import "@aws-amplify/ui-react/styles.css";
+
+Amplify.configure(outputs);
+
+const client = generateClient<Schema>();
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [notes, setNotes] = useState<Schema["Note"]["type"][]>([]);
+  useEffect(() => {
+    const sub = client.models.Note.observeQuery().subscribe({
+      next: (data) => {
+        setNotes([...data.items]);
+      },
+    });
+    return () => sub.unsubscribe();
+  }, []);
 
   return (
     <>
-      <div>
-        <a href="https://vitejs.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      <h1>Note</h1>
+      <ul>
+        {notes?.map((note) => (
+          <li
+            key={note.id}
+            onClick={async () => {
+              await client.models.Note.delete({ id: note.id });
+            }}
+          >
+            <div>{note.content}</div>
+          </li>
+        ))}
+      </ul>
+      <button
+        onClick={async () => {
+          await client.models.Note.create({
+            content: window.prompt("New note?"),
+          });
+        }}
+      >
+        Create Note
+      </button>
+      <button
+        onClick={async () => {
+          const { data } = await client.queries.listEventWithCoord();
+          window.alert(JSON.stringify(data));
+        }}
+      >
+        Fetch events
+      </button>
     </>
-  )
+  );
 }
 
-export default App
+export default withAuthenticator(App);
